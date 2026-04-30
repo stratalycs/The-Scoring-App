@@ -3,209 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ultimate Cricket Scorer</title>
+    <title>Elite Cricket Scorer Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .ball-scroll::-webkit-scrollbar { height: 4px; }
+        .ball-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .strike-glow { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.15); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans select-none">
 
+    <div id="setup-overlay" class="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-6 hidden">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h2 class="text-xl font-black text-blue-400 mb-4 uppercase">Match Setup</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Total Overs</label>
+                    <input type="number" id="setup-overs" value="20" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Players per Team</label>
+                    <input type="number" id="setup-players" value="11" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 outline-none focus:border-blue-500">
+                </div>
+                <button onclick="confirmSetup()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all">START MATCH</button>
+            </div>
+        </div>
+    </div>
+
     <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-20 shadow-xl">
-        <div class="max-w-xl mx-auto flex justify-between items-end">
+        <div class="max-w-xl mx-auto flex justify-between items-start mb-2">
             <div>
-                <input id="team-name-input" onchange="updateTeamName()" class="bg-transparent text-blue-500 font-bold uppercase tracking-widest text-xs border-b border-slate-800 outline-none w-32 focus:border-blue-400" value="TEAM A">
-                <p id="innings-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">1st Innings</p>
+                <input id="team-name-input" onchange="updateMatchInfo()" class="bg-transparent text-blue-500 font-bold uppercase tracking-widest text-[10px] outline-none w-32" value="TEAM A">
                 <h1 id="score-main" class="text-5xl font-black tabular-nums">0/0</h1>
+                <p class="text-[10px] font-bold text-blue-400 uppercase mt-1 tracking-wider">CRR: <span id="crr-val">0.00</span></p>
             </div>
             <div class="text-right">
                 <p id="overs-main" class="text-3xl font-mono text-slate-300">0.0</p>
-                <div id="target-box" class="invisible">
-                    <p class="text-[10px] text-orange-400 font-bold uppercase">Target: <span id="target-val">0</span></p>
+                <div id="target-box" class="invisible text-[10px] text-orange-400 font-bold uppercase mt-1">
+                    TGT: <span id="target-val">0</span> <span class="mx-1 text-slate-700">|</span> RRR: <span id="rrr-val">0.00</span>
                 </div>
             </div>
         </div>
-        
-        <div id="ticker" class="mt-4 flex gap-3 overflow-x-auto no-scrollbar py-2 flex-row-reverse justify-end"></div>
-    </header>
 
-    <main class="flex-1 max-w-xl w-full mx-auto p-4 space-y-4 overflow-y-auto">
-        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-            <div id="info-val" class="text-lg font-bold text-blue-400 text-center">Game in Progress</div>
-            <div id="prev-score" class="text-sm text-slate-400 mt-2 text-center hidden font-medium"></div>
+        <div class="max-w-xl mx-auto grid grid-cols-2 gap-3 mt-4">
+            <div id="b1-card" class="border border-slate-800 rounded-xl p-3 transition-all duration-300">
+                <input id="b1-name" onchange="updateMatchInfo()" placeholder="Batsman 1" class="bg-transparent text-[11px] font-bold w-full outline-none uppercase text-slate-400">
+                <p class="text-xl font-black tabular-nums mt-1"><span id="b1-runs">0</span> <span class="text-xs text-slate-500 font-normal">balls <span id="b1-balls">0</span></span></p>
+            </div>
+            <div id="b2-card" class="border border-slate-800 rounded-xl p-3 transition-all duration-300 text-right">
+                <input id="b2-name" onchange="updateMatchInfo()" placeholder="Batsman 2" class="bg-transparent text-[11px] font-bold w-full outline-none uppercase text-slate-400 text-right">
+                <p class="text-xl font-black tabular-nums mt-1"><span id="b2-runs">0</span> <span class="text-xs text-slate-500 font-normal">balls <span id="b2-balls">0</span></span></p>
+            </div>
         </div>
 
-        <div id="history-section" class="hidden">
-            <h3 class="text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1 tracking-widest">Recent Matches</h3>
-            <div id="match-log" class="space-y-2"></div>
+        <div class="max-w-xl mx-auto mt-3 flex items-center justify-between bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                <span class="text-[10px] font-bold text-slate-500 uppercase">Bowling</span>
+            </div>
+            <input id="bowler-input" onchange="updateMatchInfo()" placeholder="Enter Bowler Name" class="bg-transparent text-xs font-bold text-blue-400 outline-none text-right w-1/2">
+        </div>
+        
+        <div id="ticker" class="ball-scroll flex gap-3 overflow-x-auto py-3 px-1 flex-row-reverse justify-start mt-1"></div>
+    </header>
+
+    <main class="flex-1 max-w-xl w-full mx-auto p-4 flex flex-col justify-center">
+        <div id="info-val" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center font-bold text-blue-400 text-lg shadow-inner">
+            Awaiting Kickoff
         </div>
     </main>
 
-    <section class="bg-slate-900 border-t border-slate-800 p-3 pb-8 shadow-2xl z-10">
+    <section class="bg-slate-900 border-t border-slate-800 p-3 pb-8 shadow-2xl">
         <div class="max-w-xl mx-auto grid grid-cols-4 gap-2 mb-4">
-            <button onclick="recordBall(0)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-lg text-xl font-bold transition-all active:scale-95">0</button>
-            <button onclick="recordBall(1)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-lg text-xl font-bold transition-all active:scale-95">1</button>
-            <button onclick="recordBall(2)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-lg text-xl font-bold transition-all active:scale-95">2</button>
-            <button onclick="recordBall(3)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-lg text-xl font-bold transition-all active:scale-95">3</button>
-            <button onclick="recordBall(4)" class="bg-slate-800 active:bg-green-700 h-14 rounded-lg text-xl font-bold border-b-4 border-green-900 active:scale-95 transition-all">4</button>
-            <button onclick="recordBall(6)" class="bg-slate-800 active:bg-green-700 h-14 rounded-lg text-xl font-bold border-b-4 border-green-900 active:scale-95 transition-all">6</button>
-            <button onclick="recordBall('Extra')" class="bg-orange-700/80 active:bg-orange-600 h-14 rounded-lg text-xs font-black uppercase">Extra</button>
-            <button onclick="recordBall('W')" class="bg-red-700/80 active:bg-red-600 h-14 rounded-lg text-xs font-black uppercase border-b-4 border-red-900 active:scale-95">Wicket</button>
+            <button onclick="recordBall(0)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-xl text-xl font-bold transition-all">0</button>
+            <button onclick="recordBall(1)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-xl text-xl font-bold transition-all">1</button>
+            <button onclick="recordBall(2)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-xl text-xl font-bold transition-all">2</button>
+            <button onclick="recordBall(3)" class="bg-slate-800 active:bg-blue-600 h-14 rounded-xl text-xl font-bold transition-all">3</button>
+            <button onclick="recordBall(4)" class="bg-slate-800 active:bg-green-700 h-14 rounded-xl text-xl font-bold border-b-4 border-green-900 transition-all">4</button>
+            <button onclick="recordBall(6)" class="bg-slate-800 active:bg-green-700 h-14 rounded-xl text-xl font-bold border-b-4 border-green-900 transition-all">6</button>
+            <button onclick="recordBall('Extra')" class="bg-orange-800 active:bg-orange-600 h-14 rounded-xl text-xs font-black uppercase">Extra</button>
+            <button onclick="recordBall('W')" class="bg-red-900 active:bg-red-700 h-14 rounded-xl text-xs font-black uppercase border-b-4 border-red-800 transition-all">Wicket</button>
         </div>
-
         <div class="max-w-xl mx-auto grid grid-cols-4 gap-2">
-            <button onclick="undo()" class="py-3 text-[10px] uppercase font-bold text-slate-400 border border-slate-800 rounded-md">Undo</button>
-            <button id="innings-btn" onclick="nextInnings()" class="py-3 text-[10px] uppercase font-bold text-blue-400 border border-blue-900/40 bg-blue-950/20 rounded-md">Inn 2</button>
-            <button onclick="exportToExcel()" class="py-3 text-[10px] uppercase font-bold text-green-500 border border-green-900/40 bg-green-950/10 rounded-md">Excel</button>
-            <button onclick="startNewMatch()" class="py-3 text-[10px] uppercase font-bold text-red-500 border border-red-900/30 rounded-md">New</button>
+            <button onclick="undo()" class="py-3 text-[10px] font-bold text-slate-500 border border-slate-800 rounded-lg uppercase">Undo</button>
+            <button onclick="nextInnings()" class="py-3 text-[10px] font-bold text-blue-400 border border-blue-900/30 rounded-lg bg-blue-900/10 uppercase">Inn 2</button>
+            <button onclick="exportToExcel()" class="py-3 text-[10px] font-bold text-green-500 border border-green-900/30 rounded-lg bg-green-900/10 uppercase">Excel</button>
+            <button onclick="triggerSetup()" class="py-3 text-[10px] font-bold text-red-500 border border-red-900/30 rounded-lg uppercase">New</button>
         </div>
     </section>
 
     <script>
-        let match = JSON.parse(localStorage.getItem('match_v5')) || createNewMatchData();
-        let log = JSON.parse(localStorage.getItem('match_log')) || [];
+        let match = JSON.parse(localStorage.getItem('match_vElite_Final')) || null;
 
-        function createNewMatchData() {
-            return {
-                id: Date.now(),
-                currentInnings: 1,
-                team1Name: "TEAM A",
-                team2Name: "TEAM B",
-                team1: { runs: 0, wickets: 0, balls: 0, history: [] },
-                team2: { runs: 0, wickets: 0, balls: 0, history: [] },
-                isFinished: false
+        function triggerSetup() { document.getElementById('setup-overlay').classList.remove('hidden'); }
+        
+        function confirmSetup() {
+            const ov = parseInt(document.getElementById('setup-overs').value);
+            const pl = parseInt(document.getElementById('setup-players').value);
+            match = {
+                id: Date.now(), overs: ov, wickets: pl - 1,
+                curr: 1, t1Name: "TEAM A", t2Name: "TEAM B", striker: 1,
+                b1: { name: "", r: 0, b: 0 }, b2: { name: "", r: 0, b: 0 }, bowler: "",
+                t1: { r: 0, w: 0, b: 0, h: [] }, t2: { r: 0, w: 0, b: 0, h: [] }
             };
+            document.getElementById('setup-overlay').classList.add('hidden');
+            save();
         }
 
-        function getActive() { return match.currentInnings === 1 ? match.team1 : match.team2; }
-        function formatOver(totalBalls) { return `${Math.floor(totalBalls / 6)}.${totalBalls % 6}`; }
+        function getActive() { return match.curr === 1 ? match.t1 : match.t2; }
+        function fOver(b) { return Math.floor(b/6) + "." + (b%6); }
 
-        function updateTeamName() {
-            const val = document.getElementById('team-name-input').value;
-            if(match.currentInnings === 1) match.team1Name = val; else match.team2Name = val;
+        function updateMatchInfo() {
+            if(!match) return;
+            const tIn = document.getElementById('team-name-input').value;
+            if(match.curr === 1) match.t1Name = tIn; else match.t2Name = tIn;
+            match.b1.name = document.getElementById('b1-name').value;
+            match.b2.name = document.getElementById('b2-name').value;
+            match.bowler = document.getElementById('bowler-input').value;
             save();
         }
 
         function updateUI() {
-            const active = getActive();
-            document.getElementById('team-name-input').value = match.currentInnings === 1 ? match.team1Name : match.team2Name;
-            document.getElementById('score-main').innerHTML = `${active.runs}<span class="text-slate-600 text-3xl font-light">/${active.wickets}</span>`;
-            document.getElementById('overs-main').innerText = formatOver(active.balls);
-            document.getElementById('innings-label').innerText = `${match.currentInnings === 1 ? '1st Innings' : '2nd Innings'}`;
+            if(!match) { triggerSetup(); return; }
+            const a = getActive();
+            document.getElementById('score-main').innerText = `${a.r}/${a.w}`;
+            document.getElementById('overs-main').innerText = fOver(a.b);
+            document.getElementById('b1-name').value = match.b1.name;
+            document.getElementById('b2-name').value = match.b2.name;
+            document.getElementById('b1-runs').innerText = match.b1.r;
+            document.getElementById('b1-balls').innerText = match.b1.b;
+            document.getElementById('b2-runs').innerText = match.b2.r;
+            document.getElementById('b2-balls').innerText = match.b2.b;
+            document.getElementById('bowler-input').value = match.bowler;
+            document.getElementById('crr-val').innerText = (a.b > 0 ? (a.r / (a.b/6)).toFixed(2) : "0.00");
             
-            const targetBox = document.getElementById('target-box');
-            const prevScoreEl = document.getElementById('prev-score');
-            const inningsBtn = document.getElementById('innings-btn');
+            // Strike Management
+            document.getElementById('b1-card').className = match.striker === 1 ? 'strike-glow rounded-xl p-3 transition-all' : 'border border-slate-800 rounded-xl p-3';
+            document.getElementById('b2-card').className = match.striker === 2 ? 'strike-glow rounded-xl p-3 transition-all' : 'border border-slate-800 rounded-xl p-3';
 
-            if (match.currentInnings === 2) {
-                targetBox.classList.remove('invisible');
-                document.getElementById('target-val').innerText = match.team1.runs + 1;
-                prevScoreEl.classList.remove('hidden');
-                inningsBtn.classList.add('opacity-30', 'pointer-events-none');
-                
-                const needed = (match.team1.runs + 1) - active.runs;
-                if (needed > 0) {
-                    prevScoreEl.innerText = `Need ${needed} runs to win`;
-                } else {
-                    prevScoreEl.innerText = `${match.team2Name} won the match!`;
-                    match.isFinished = true;
+            if(match.curr === 2) {
+                document.getElementById('target-box').classList.remove('invisible');
+                let target = match.t1.r + 1;
+                document.getElementById('target-val').innerText = target;
+                let ballsLeft = (match.overs * 6) - a.b;
+                document.getElementById('rrr-val').innerText = ballsLeft > 0 ? ((target - a.r) / (ballsLeft/6)).toFixed(2) : "0.00";
+                document.getElementById('info-val').innerText = `Need ${target - a.r} runs from ${ballsLeft} balls`;
+            } else {
+                document.getElementById('info-val').innerText = `Target Setting Mode: ${match.overs} Overs`;
+            }
+
+            document.getElementById('ticker').innerHTML = a.h.map(ball => `
+                <div class="flex flex-col items-center flex-shrink-0">
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center text-[11px] border ${ball.v === 'W' ? 'bg-red-900 border-red-500' : (ball.v === 4 || ball.v === 6 ? 'bg-green-900 border-green-500' : 'bg-slate-800 border-slate-700')} font-bold">${ball.v}</div>
+                    <span class="text-[9px] text-slate-500 mt-1 font-mono">${ball.n}</span>
+                </div>
+            `).reverse().join('');
+        }
+
+        function recordBall(v) {
+            const a = getActive();
+            if(v === 'Extra') { 
+                a.r++; 
+                a.h.push({ v: '+1', n: fOver(a.b) }); 
+            } else if(v === 'W') {
+                a.w++; a.b++;
+                let curBat = match.striker === 1 ? match.b1 : match.b2;
+                curBat.b++;
+                a.h.push({ v: 'W', n: fOver(a.b) });
+                if(a.w < match.wickets) {
+                    let newN = prompt("New Batsman Name:");
+                    if(match.striker === 1) match.b1 = {name: newN || "New Batsman", r:0, b:0};
+                    else match.b2 = {name: newN || "New Batsman", r:0, b:0};
                 }
             } else {
-                targetBox.classList.add('invisible');
-                prevScoreEl.classList.add('hidden');
-                inningsBtn.classList.remove('opacity-30', 'pointer-events-none');
+                a.r += v; a.b++;
+                let curBat = match.striker === 1 ? match.b1 : match.b2;
+                curBat.r += v; curBat.b++;
+                a.h.push({ v: v, n: fOver(a.b) });
+                if(v === 1 || v === 3) match.striker = match.striker === 1 ? 2 : 1;
             }
 
-            document.getElementById('ticker').innerHTML = active.history.slice(-10).map(ballObj => {
-                let theme = "bg-slate-800 border-slate-700 text-slate-300";
-                if(ballObj.val === 'W') theme = "bg-red-900 border-red-500 text-white font-bold";
-                if(ballObj.val === 4 || ballObj.val === 6) theme = "bg-green-900 border-green-500 text-green-400 font-bold";
-                
-                return `
-                    <div class="flex flex-col items-center flex-shrink-0">
-                        <div class="w-9 h-9 rounded-full flex items-center justify-center text-[11px] border ${theme} mb-1">
-                            ${ballObj.val}
-                        </div>
-                        <span class="text-[9px] text-slate-500 font-mono">${ballObj.ballNum}</span>
-                    </div>
-                `;
-            }).reverse().join('');
-
-            const historySec = document.getElementById('history-section');
-            if (log.length > 0) {
-                historySec.classList.remove('hidden');
-                document.getElementById('match-log').innerHTML = log.map(m => `
-                    <div class="bg-slate-900 border border-slate-800 p-2 rounded text-[10px] flex justify-between">
-                        <span class="text-slate-400">${m.date}</span>
-                        <span class="font-bold">${m.summary}</span>
-                    </div>
-                `).join('');
-            }
-        }
-
-        function recordBall(val) {
-            if (match.isFinished) return;
-            const active = getActive();
-            if (val === 'Extra') {
-                active.runs++;
-                active.history.push({ val: '+1', ballNum: formatOver(active.balls) });
-            } else {
-                if (val === 'W') { if(active.wickets < 10) active.wickets++; }
-                else { active.runs += val; }
-                active.balls++;
-                active.history.push({ val: val, ballNum: formatOver(active.balls) });
+            // Logic for Over End
+            if(v !== 'Extra' && a.b % 6 === 0) {
+                match.striker = match.striker === 1 ? 2 : 1; // Rotation for new over
+                setTimeout(() => {
+                    let newBowler = prompt("Over Finished! Enter New Bowler Name:");
+                    match.bowler = newBowler || "";
+                    save();
+                }, 100);
             }
             save();
         }
 
-        function save() {
-            localStorage.setItem('match_v5', JSON.stringify(match));
-            localStorage.setItem('match_log', JSON.stringify(log));
-            updateUI();
-        }
-
-        function nextInnings() {
-            if(confirm("End 1st Innings?")) { match.currentInnings = 2; save(); }
-        }
-
-        function undo() {
-            const active = getActive();
-            const last = active.history.pop();
-            if(!last) return;
-            match.isFinished = false;
-            if(last.val === 'W') { active.wickets--; active.balls--; }
-            else if(last.val === '+1') { active.runs--; }
-            else { active.runs -= last.val; active.balls--; }
-            save();
-        }
-
-        function startNewMatch() {
-            if(confirm("Start new match? Current will be archived.")) {
-                log.unshift({ 
-                    date: new Date().toLocaleDateString(), 
-                    summary: `${match.team1Name}: ${match.team1.runs}/${match.team1.wickets} | ${match.team2Name}: ${match.team2.runs}/${match.team2.wickets}` 
-                });
-                log = log.slice(0, 5);
-                match = createNewMatchData();
-                save();
-            }
-        }
+        function save() { localStorage.setItem('match_vElite_Final', JSON.stringify(match)); updateUI(); }
+        function undo() { alert("Undo restricted in player-tracking mode."); }
+        function nextInnings() { if(confirm("Start 2nd Innings?")) { match.curr = 2; match.striker = 1; match.b1 = {name:"",r:0,b:0}; match.b2 = {name:"",r:0,b:0}; match.bowler=""; save(); } }
 
         function exportToExcel() {
-            const data = [
-                ["Cricket Match Scorecard"],
-                ["Date", new Date().toLocaleDateString()],
+            const a = getActive();
+            const data = [ 
+                ["Innings", match.curr],
+                ["Team", match.curr === 1 ? match.t1Name : match.t2Name],
+                ["Score", a.r + "/" + a.w],
+                ["Overs", fOver(a.b)],
                 [],
-                ["Team Name", "Runs", "Wickets", "Overs"],
-                [match.team1Name, match.team1.runs, match.team1.wickets, formatOver(match.team1.balls)],
-                [match.team2Name, match.team2.runs, match.team2.wickets, formatOver(match.team2.balls)]
+                ["Batsman", "Runs", "Balls"],
+                [match.b1.name, match.b1.r, match.b1.b],
+                [match.b2.name, match.b2.r, match.b2.b],
+                [],
+                ["Last Bowler", match.bowler]
             ];
             const ws = XLSX.utils.aoa_to_sheet(data);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Scorecard");
-            XLSX.writeFile(wb, `Scorecard_${Date.now()}.xlsx`);
+            XLSX.utils.book_append_sheet(wb, ws, "Match Summary");
+            XLSX.writeFile(wb, "CricketScorecard.xlsx");
         }
 
         updateUI();
