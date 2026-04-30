@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ultimate Cricket Scorer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -15,7 +16,8 @@
     <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-20 shadow-xl">
         <div class="max-w-xl mx-auto flex justify-between items-end">
             <div>
-                <p id="innings-label" class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-1">1st Innings</p>
+                <input id="team-name-input" onchange="updateTeamName()" class="bg-transparent text-blue-500 font-bold uppercase tracking-widest text-xs border-b border-slate-800 outline-none w-32 focus:border-blue-400" value="TEAM A">
+                <p id="innings-label" class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">1st Innings</p>
                 <h1 id="score-main" class="text-5xl font-black tabular-nums">0/0</h1>
             </div>
             <div class="text-right">
@@ -53,21 +55,24 @@
             <button onclick="recordBall('W')" class="bg-red-700/80 active:bg-red-600 h-14 rounded-lg text-xs font-black uppercase border-b-4 border-red-900 active:scale-95">Wicket</button>
         </div>
 
-        <div class="max-w-xl mx-auto grid grid-cols-3 gap-2">
-            <button onclick="undo()" class="py-3 text-[10px] uppercase font-bold text-slate-400 border border-slate-800 rounded-md active:bg-slate-800 transition-colors">Undo</button>
-            <button id="innings-btn" onclick="nextInnings()" class="py-3 text-[10px] uppercase font-bold text-blue-400 border border-blue-900/40 bg-blue-950/20 rounded-md">Innings 2</button>
-            <button onclick="startNewMatch()" class="py-3 text-[10px] uppercase font-bold text-red-500 border border-red-900/30 rounded-md active:bg-red-950/20">New Match</button>
+        <div class="max-w-xl mx-auto grid grid-cols-4 gap-2">
+            <button onclick="undo()" class="py-3 text-[10px] uppercase font-bold text-slate-400 border border-slate-800 rounded-md">Undo</button>
+            <button id="innings-btn" onclick="nextInnings()" class="py-3 text-[10px] uppercase font-bold text-blue-400 border border-blue-900/40 bg-blue-950/20 rounded-md">Inn 2</button>
+            <button onclick="exportToExcel()" class="py-3 text-[10px] uppercase font-bold text-green-500 border border-green-900/40 bg-green-950/10 rounded-md">Excel</button>
+            <button onclick="startNewMatch()" class="py-3 text-[10px] uppercase font-bold text-red-500 border border-red-900/30 rounded-md">New</button>
         </div>
     </section>
 
     <script>
-        let match = JSON.parse(localStorage.getItem('match_v4')) || createNewMatchData();
+        let match = JSON.parse(localStorage.getItem('match_v5')) || createNewMatchData();
         let log = JSON.parse(localStorage.getItem('match_log')) || [];
 
         function createNewMatchData() {
             return {
                 id: Date.now(),
                 currentInnings: 1,
+                team1Name: "TEAM A",
+                team2Name: "TEAM B",
                 team1: { runs: 0, wickets: 0, balls: 0, history: [] },
                 team2: { runs: 0, wickets: 0, balls: 0, history: [] },
                 isFinished: false
@@ -75,13 +80,17 @@
         }
 
         function getActive() { return match.currentInnings === 1 ? match.team1 : match.team2; }
+        function formatOver(totalBalls) { return `${Math.floor(totalBalls / 6)}.${totalBalls % 6}`; }
 
-        function formatOver(totalBalls) {
-            return `${Math.floor(totalBalls / 6)}.${totalBalls % 6}`;
+        function updateTeamName() {
+            const val = document.getElementById('team-name-input').value;
+            if(match.currentInnings === 1) match.team1Name = val; else match.team2Name = val;
+            save();
         }
 
         function updateUI() {
             const active = getActive();
+            document.getElementById('team-name-input').value = match.currentInnings === 1 ? match.team1Name : match.team2Name;
             document.getElementById('score-main').innerHTML = `${active.runs}<span class="text-slate-600 text-3xl font-light">/${active.wickets}</span>`;
             document.getElementById('overs-main').innerText = formatOver(active.balls);
             document.getElementById('innings-label').innerText = `${match.currentInnings === 1 ? '1st Innings' : '2nd Innings'}`;
@@ -100,7 +109,7 @@
                 if (needed > 0) {
                     prevScoreEl.innerText = `Need ${needed} runs to win`;
                 } else {
-                    prevScoreEl.innerText = `Team B won the match!`;
+                    prevScoreEl.innerText = `${match.team2Name} won the match!`;
                     match.isFinished = true;
                 }
             } else {
@@ -109,7 +118,6 @@
                 inningsBtn.classList.remove('opacity-30', 'pointer-events-none');
             }
 
-            // Updated Ticker with Ball Numbers
             document.getElementById('ticker').innerHTML = active.history.slice(-10).map(ballObj => {
                 let theme = "bg-slate-800 border-slate-700 text-slate-300";
                 if(ballObj.val === 'W') theme = "bg-red-900 border-red-500 text-white font-bold";
@@ -117,7 +125,7 @@
                 
                 return `
                     <div class="flex flex-col items-center flex-shrink-0">
-                        <div class="w-9 h-9 rounded-full flex items-center justify-center text-[11px] border ${theme} mb-1 transition-all">
+                        <div class="w-9 h-9 rounded-full flex items-center justify-center text-[11px] border ${theme} mb-1">
                             ${ballObj.val}
                         </div>
                         <span class="text-[9px] text-slate-500 font-mono">${ballObj.ballNum}</span>
@@ -126,43 +134,40 @@
             }).reverse().join('');
 
             const historySec = document.getElementById('history-section');
-            const logEl = document.getElementById('match-log');
             if (log.length > 0) {
                 historySec.classList.remove('hidden');
-                logEl.innerHTML = log.map(m => `
+                document.getElementById('match-log').innerHTML = log.map(m => `
                     <div class="bg-slate-900 border border-slate-800 p-2 rounded text-[10px] flex justify-between">
-                        <span class="text-slate-400">${new Date(m.id).toLocaleDateString()}</span>
-                        <span class="font-bold">${m.t1} vs ${m.t2}</span>
+                        <span class="text-slate-400">${m.date}</span>
+                        <span class="font-bold">${m.summary}</span>
                     </div>
                 `).join('');
             }
-
-            localStorage.setItem('match_v4', JSON.stringify(match));
-            localStorage.setItem('match_log', JSON.stringify(log));
         }
 
         function recordBall(val) {
             if (match.isFinished) return;
             const active = getActive();
-            
-            let ballIdentifier;
             if (val === 'Extra') {
-                // Extras don't increment ball count for the over usually
                 active.runs++;
-                ballIdentifier = formatOver(active.balls);
-                active.history.push({ val: '+1', ballNum: ballIdentifier });
+                active.history.push({ val: '+1', ballNum: formatOver(active.balls) });
             } else {
                 if (val === 'W') { if(active.wickets < 10) active.wickets++; }
                 else { active.runs += val; }
-                active.balls++; // Increment legal delivery
-                ballIdentifier = formatOver(active.balls);
-                active.history.push({ val: val, ballNum: ballIdentifier });
+                active.balls++;
+                active.history.push({ val: val, ballNum: formatOver(active.balls) });
             }
+            save();
+        }
+
+        function save() {
+            localStorage.setItem('match_v5', JSON.stringify(match));
+            localStorage.setItem('match_log', JSON.stringify(log));
             updateUI();
         }
 
         function nextInnings() {
-            if(confirm("End 1st Innings?")) { match.currentInnings = 2; updateUI(); }
+            if(confirm("End 1st Innings?")) { match.currentInnings = 2; save(); }
         }
 
         function undo() {
@@ -173,16 +178,34 @@
             if(last.val === 'W') { active.wickets--; active.balls--; }
             else if(last.val === '+1') { active.runs--; }
             else { active.runs -= last.val; active.balls--; }
-            updateUI();
+            save();
         }
 
         function startNewMatch() {
-            if(confirm("Start a new match? History will be saved.")) {
-                log.unshift({ id: match.id, t1: match.team1.runs + "/" + match.team1.wickets, t2: match.team2.runs + "/" + match.team2.wickets });
+            if(confirm("Start new match? Current will be archived.")) {
+                log.unshift({ 
+                    date: new Date().toLocaleDateString(), 
+                    summary: `${match.team1Name}: ${match.team1.runs}/${match.team1.wickets} | ${match.team2Name}: ${match.team2.runs}/${match.team2.wickets}` 
+                });
                 log = log.slice(0, 5);
                 match = createNewMatchData();
-                updateUI();
+                save();
             }
+        }
+
+        function exportToExcel() {
+            const data = [
+                ["Cricket Match Scorecard"],
+                ["Date", new Date().toLocaleDateString()],
+                [],
+                ["Team Name", "Runs", "Wickets", "Overs"],
+                [match.team1Name, match.team1.runs, match.team1.wickets, formatOver(match.team1.balls)],
+                [match.team2Name, match.team2.runs, match.team2.wickets, formatOver(match.team2.balls)]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Scorecard");
+            XLSX.writeFile(wb, `Scorecard_${Date.now()}.xlsx`);
         }
 
         updateUI();
