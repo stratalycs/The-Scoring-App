@@ -1,10 +1,16 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cricket Scorer Elite - Swap Strike</title>
+    <title>Cricket Scorer Elite</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5359/5359146.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -81,7 +87,7 @@
                     <p class="text-xl font-black text-white"><span id="b1-runs">0</span> <span class="text-xs text-slate-500">(<span id="b1-balls">0</span>)</span></p>
                 </div>
                 
-                <button onclick="swapStrike()" class="bg-slate-800 p-2 rounded-full border border-slate-700 hover:bg-blue-900/40 transition-colors">
+                <button onclick="swapStrike()" class="bg-slate-800 p-2 rounded-full border border-slate-700 active:bg-blue-600 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
@@ -101,14 +107,14 @@
         </header>
         
         <main class="flex-1 p-4 flex flex-col justify-center">
-            <div id="info-val" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center font-bold text-blue-400">Match in progress</div>
+            <div id="info-val" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center font-bold text-blue-400">Match Active</div>
         </main>
     </div>
 
     <div id="view-scorecard" class="flex-1 overflow-y-auto p-4 hidden pb-24">
         <div id="scorecard-container" class="max-w-xl mx-auto space-y-8"></div>
         <div class="text-center mt-12 pb-6">
-            <p class="text-[9px] text-slate-700 font-bold uppercase tracking-widest">Total Matches Played: <span id="footer-match-count">0</span></p>
+            <p class="text-[9px] text-slate-700 font-bold uppercase tracking-widest">Local Session Matches: <span id="footer-match-count">0</span></p>
         </div>
     </div>
 
@@ -132,6 +138,11 @@
     </section>
 
     <script>
+        // SERVICE WORKER REGISTRATION
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(err => console.log("SW Fail:", err));
+        }
+
         let match = JSON.parse(localStorage.getItem('match_vElite_Current')) || null;
         let history = JSON.parse(localStorage.getItem('match_history')) || [];
         let matchPlayedCount = parseInt(localStorage.getItem('match_played_count')) || 0;
@@ -211,168 +222,4 @@
         }
 
         function recordBall(v) {
-            if(!match.b1 || !match.b2 || !match.bowler) return alert("Assign Players & Bowler!");
-            saveSnapshot();
-            const a = getActive();
-            let cb = (match.striker === 1) ? match.b1 : match.b2;
-
-            if(v === 'W') {
-                a.w++; a.b++; cb.b++; cb.out = true;
-                a.fow.push({ wNum: a.w, score: a.r, over: fOver(a.b), player: cb.name });
-                updateBowlStats(match.bowler, 0, 1, true);
-                updateBatStats(cb);
-                a.h.push({ v: 'W', n: fOver(a.b), class: 'ball-wicket' });
-                if(a.w >= match.wickets) nextInnings();
-                else { if(match.striker === 1) match.b1 = null; else match.b2 = null; }
-            } else {
-                a.r += v; a.b++; cb.r += v; cb.b++;
-                updateBowlStats(match.bowler, v, 0, true);
-                a.h.push({ v: v, n: fOver(a.b), class: v >= 4 ? 'ball-boundary' : 'ball-normal' });
-                if(v % 2 !== 0) match.striker = (match.striker === 1) ? 2 : 1;
-            }
-
-            if(match.curr === 2 && a.r > match.t1.r) { alert("Match Over!"); match.isFinished = true; }
-            else if(a.b % 6 === 0 && v !== 'W') {
-                match.striker = (match.striker === 1) ? 2 : 1;
-                match.bowler = "";
-            }
-            save();
-        }
-
-        function updateBatStats(bat) {
-            const a = getActive();
-            let idx = a.batStats.findIndex(p => p.name === bat.name);
-            if(idx > -1) a.batStats[idx] = JSON.parse(JSON.stringify(bat));
-            else a.batStats.push(JSON.parse(JSON.stringify(bat)));
-        }
-
-        function updateBowlStats(name, runs, wicks, isBall) {
-            const f = getFielding();
-            let idx = f.bowlStats.findIndex(p => p.name === name);
-            if(idx === -1) f.bowlStats.push({name, r: runs, w: wicks, b: isBall?1:0});
-            else { f.bowlStats[idx].r += runs; f.bowlStats[idx].w += wicks; if(isBall) f.bowlStats[idx].b++; }
-        }
-
-        function save() { 
-            if(match.b1) updateBatStats(match.b1);
-            if(match.b2) updateBatStats(match.b2);
-            localStorage.setItem('match_vElite_Current', JSON.stringify(match)); 
-            updateUI(); 
-        }
-
-        function updateUI() {
-            if(!match) { triggerSetup(); return; }
-            document.getElementById('setup-overlay').classList.add('hidden');
-            const a = getActive(); const f = getFielding();
-            
-            document.getElementById('team-display').innerText = a.name;
-            document.getElementById('score-main').innerText = a.r + "/" + a.w;
-            document.getElementById('overs-main').innerText = fOver(a.b);
-
-            const populate = (id, current, squad) => {
-                const el = document.getElementById(id);
-                let html = `<option value="">Select Batter</option>`;
-                squad.forEach(p => {
-                    const isOut = a.batStats.find(s => s.name === p && s.out);
-                    const isIn = (match.b1?.name === p || match.b2?.name === p) && current?.name !== p;
-                    if(!isOut && !isIn) html += `<option value="${p}" ${current?.name === p ? 'selected' : ''}>${p}</option>`;
-                });
-                el.innerHTML = html;
-            };
-
-            populate('b1-select', match.b1, a.squad);
-            populate('b2-select', match.b2, a.squad);
-            
-            let bHtml = `<option value="">Select Bowler</option>`;
-            f.squad.forEach(p => bHtml += `<option value="${p}" ${p === match.bowler ? 'selected' : ''}>${p}</option>`);
-            document.getElementById('bowler-select').innerHTML = bHtml;
-
-            document.getElementById('b1-runs').innerText = match.b1?.r || 0;
-            document.getElementById('b1-balls').innerText = match.b1?.b || 0;
-            document.getElementById('b2-runs').innerText = match.b2?.r || 0;
-            document.getElementById('b2-balls').innerText = match.b2?.b || 0;
-
-            document.getElementById('b1-card').className = match.striker === 1 ? 'flex-1 border rounded-xl p-3 strike-glow' : 'flex-1 border border-slate-800 rounded-xl p-3';
-            document.getElementById('b2-card').className = match.striker === 2 ? 'flex-1 border rounded-xl p-3 strike-glow text-right' : 'flex-1 border border-slate-800 rounded-xl p-3 text-right';
-
-            document.getElementById('ticker').innerHTML = a.h.slice(-10).map(b => `<div class="w-8 h-8 rounded-full border flex items-center justify-center text-[9px] font-black ${b.class}">${b.v}</div>`).reverse().join('');
-            
-            if(match.curr === 2) {
-                document.getElementById('target-box').classList.remove('invisible');
-                document.getElementById('target-val').innerText = match.t1.r + 1;
-            }
-        }
-
-        function switchTab(tab) {
-            document.getElementById('view-live').classList.toggle('hidden', tab !== 'live');
-            document.getElementById('view-scorecard').classList.toggle('hidden', tab !== 'scorecard');
-            document.getElementById('tab-live-btn').className = tab === 'live' ? 'pb-3 px-6 tab-active text-blue-400' : 'pb-3 px-6 text-slate-500';
-            document.getElementById('tab-score-btn').className = tab === 'scorecard' ? 'pb-3 px-6 tab-active text-blue-400' : 'pb-3 px-6 text-slate-500';
-            if(tab === 'scorecard') renderScorecard();
-        }
-
-        function renderScorecard() {
-            const renderInnings = (team, bowlingSide) => `
-                <div class="bg-slate-900 rounded-2xl p-5 border border-slate-800">
-                    <div class="flex justify-between items-center mb-4 border-b border-slate-800 pb-2">
-                        <h3 class="text-blue-400 font-black uppercase text-[10px] tracking-widest">${team.name}</h3>
-                        <span class="text-lg font-bold">${team.r}/${team.w} <span class="text-xs text-slate-500">(${fOver(team.b)})</span></span>
-                    </div>
-                    
-                    <table class="w-full text-xs text-left mb-6">
-                        <tr class="text-slate-500 uppercase text-[9px] font-black border-b border-slate-800">
-                            <th class="py-2">Batter</th>
-                            <th class="text-right">R(B)</th>
-                        </tr>
-                        ${team.batStats.map(p => `
-                            <tr class="border-b border-slate-800/30">
-                                <td class="py-3">${p.name} ${p.out ? '<span class="text-red-700 font-bold">(out)</span>' : '*'}</td>
-                                <td class="text-right font-mono">${p.r}(${p.b})</td>
-                            </tr>
-                        `).join('')}
-                    </table>
-
-                    <h4 class="text-[9px] text-slate-500 font-black uppercase mb-2">Bowling</h4>
-                    <table class="w-full text-xs text-left mb-4">
-                        <tr class="text-slate-500 uppercase text-[9px] font-black border-b border-slate-800">
-                            <th class="py-2">Bowler</th>
-                            <th class="text-right">O-R-W</th>
-                        </tr>
-                        ${bowlingSide.bowlStats.map(b => `
-                            <tr class="border-b border-slate-800/30">
-                                <td class="py-2">${b.name}</td>
-                                <td class="text-right font-mono">${fOver(b.b)}-${b.r}-${b.w}</td>
-                            </tr>
-                        `).join('')}
-                    </table>
-
-                    <div class="mt-4 pt-2 border-t border-slate-800">
-                        <h4 class="text-[9px] text-slate-500 font-black uppercase mb-1">Fall of Wickets</h4>
-                        <p class="text-[10px] text-slate-400 italic">
-                            ${team.fow.length ? team.fow.map(f => `${f.wNum}-${f.score} (${f.player})`).join(', ') : 'No wickets fallen'}
-                        </p>
-                    </div>
-                </div>
-            `;
-            document.getElementById('scorecard-container').innerHTML = renderInnings(match.t1, match.t2) + (match.curr === 2 ? renderInnings(match.t2, match.t1) : "");
-        }
-
-        function nextInnings() {
-            if(match.curr === 2) return;
-            if(confirm("End 1st Innings?")) {
-                match.curr = 2; match.b1 = null; match.b2 = null; match.bowler = "";
-                save(); switchTab('live');
-            }
-        }
-
-        function exportToExcel() {
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(match.t1.batStats), "T1 Batting");
-            XLSX.writeFile(wb, `Match_Report_${matchPlayedCount}.xlsx`);
-        }
-
-        updateCounterDisplay();
-        if(!match) triggerSetup(); else updateUI();
-    </script>
-</body>
-</html>
+            if(!match.b
