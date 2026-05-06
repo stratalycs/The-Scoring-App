@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cricket Scorer Elite - Undo Restored</title>
+    <title>Cricket Scorer Elite - FoW Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -23,7 +23,7 @@
 
     <div id="setup-overlay" class="fixed inset-0 z-[60] bg-slate-950 flex flex-col p-6 overflow-y-auto">
         <div class="max-w-xl mx-auto w-full space-y-6">
-            <h2 class="text-2xl font-black text-blue-400 uppercase tracking-tighter">Match & Squad Setup</h2>
+            <h2 class="text-2xl font-black text-blue-400 uppercase tracking-tighter">Match Setup</h2>
             <div class="grid grid-cols-2 gap-4 bg-slate-900 p-4 rounded-2xl border border-slate-800">
                 <div>
                     <label class="text-[10px] font-bold text-slate-500 uppercase">Total Overs</label>
@@ -37,11 +37,11 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="space-y-3">
                     <input id="team1-name-setup" value="TEAM A" class="bg-transparent text-blue-500 font-black text-lg outline-none w-full border-b border-slate-800">
-                    <textarea id="team1-squad" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 h-32 text-sm outline-none" placeholder="Team A Players"></textarea>
+                    <textarea id="team1-squad" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 h-32 text-sm outline-none" placeholder="Team A Players (one per line)"></textarea>
                 </div>
                 <div class="space-y-3">
                     <input id="team2-name-setup" value="TEAM B" class="bg-transparent text-green-500 font-black text-lg outline-none w-full border-b border-slate-800">
-                    <textarea id="team2-squad" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 h-32 text-sm outline-none" placeholder="Team B Players"></textarea>
+                    <textarea id="team2-squad" class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 h-32 text-sm outline-none" placeholder="Team B Players (one per line)"></textarea>
                 </div>
             </div>
             <button onclick="confirmSetup()" class="w-full bg-blue-600 font-bold py-4 rounded-xl text-white">START MATCH</button>
@@ -86,7 +86,7 @@
         </header>
         
         <main class="flex-1 p-4 flex flex-col justify-center">
-            <div id="info-val" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center font-bold text-blue-400">Assign players to start</div>
+            <div id="info-val" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center font-bold text-blue-400">Score a ball to record history</div>
         </main>
     </div>
 
@@ -114,10 +114,10 @@
     </section>
 
     <script>
-        let match = JSON.parse(localStorage.getItem('match_vElite_Undo')) || null;
+        let match = JSON.parse(localStorage.getItem('match_vElite_FoW')) || null;
         let history = JSON.parse(localStorage.getItem('match_history')) || [];
 
-        function triggerSetup() { document.getElementById('setup-overlay').classList.remove('hidden'); }
+        function triggerSetup() { if(confirm("Start new match?")) document.getElementById('setup-overlay').classList.remove('hidden'); }
 
         function confirmSetup() {
             let p1 = document.getElementById('team1-squad').value.split('\n').filter(n => n.trim());
@@ -130,8 +130,8 @@
                 wickets: (parseInt(document.getElementById('setup-players').value) || 11) - 1,
                 curr: 1, striker: 1, isFinished: false,
                 b1: null, b2: null, bowler: "",
-                t1: { name: document.getElementById('team1-name-setup').value || "TEAM A", squad: p1, r: 0, w: 0, b: 0, h: [], batStats: [], bowlStats: [] },
-                t2: { name: document.getElementById('team2-name-setup').value || "TEAM B", squad: p2, r: 0, w: 0, b: 0, h: [], batStats: [], bowlStats: [] }
+                t1: { name: document.getElementById('team1-name-setup').value || "TEAM A", squad: p1, r: 0, w: 0, b: 0, h: [], batStats: [], bowlStats: [], fow: [] },
+                t2: { name: document.getElementById('team2-name-setup').value || "TEAM B", squad: p2, r: 0, w: 0, b: 0, h: [], batStats: [], bowlStats: [], fow: [] }
             };
             history = [];
             document.getElementById('setup-overlay').classList.add('hidden');
@@ -144,7 +144,7 @@
 
         function saveSnapshot() {
             history.push(JSON.stringify(match));
-            if(history.length > 20) history.shift(); // Keep last 20 balls
+            if(history.length > 30) history.shift();
             localStorage.setItem('match_history', JSON.stringify(history));
         }
 
@@ -168,8 +168,7 @@
         function recordExtra(type) {
             if(!match.b1 || !match.b2 || !match.bowler) return alert("Assign Players First!");
             saveSnapshot();
-            const a = getActive();
-            a.r++;
+            const a = getActive(); a.r++;
             updateBowlStats(match.bowler, 1, 0, false);
             a.h.push({ v: type, n: fOver(a.b), class: 'ball-extra' });
             save();
@@ -183,9 +182,13 @@
 
             if(v === 'W') {
                 a.w++; a.b++; cb.b++; cb.out = true;
+                // Add to Fall of Wickets
+                a.fow.push({ wNum: a.w, score: a.r, over: fOver(a.b), player: cb.name });
+                
                 updateBowlStats(match.bowler, 0, 1, true);
                 updateBatStats(cb);
                 a.h.push({ v: 'W', n: fOver(a.b), class: 'ball-wicket' });
+                
                 if(a.w >= match.wickets) nextInnings();
                 else { if(match.striker === 1) match.b1 = null; else match.b2 = null; }
             } else {
@@ -220,15 +223,14 @@
         function save() { 
             if(match.b1) updateBatStats(match.b1);
             if(match.b2) updateBatStats(match.b2);
-            localStorage.setItem('match_vElite_Undo', JSON.stringify(match)); 
+            localStorage.setItem('match_vElite_FoW', JSON.stringify(match)); 
             updateUI(); 
         }
 
         function updateUI() {
             if(!match) { triggerSetup(); return; }
             document.getElementById('setup-overlay').classList.add('hidden');
-            const a = getActive();
-            const f = getFielding();
+            const a = getActive(); const f = getFielding();
             
             document.getElementById('team-display').innerText = a.name;
             document.getElementById('score-main').innerText = a.r + "/" + a.w;
@@ -236,7 +238,7 @@
 
             const populate = (id, current, squad) => {
                 const el = document.getElementById(id);
-                let html = `<option value="">Select</option>`;
+                let html = `<option value="">Select Player</option>`;
                 squad.forEach(p => {
                     const isOut = a.batStats.find(s => s.name === p && s.out);
                     const isIn = (match.b1?.name === p || match.b2?.name === p) && current?.name !== p;
@@ -248,7 +250,7 @@
             populate('b1-select', match.b1, a.squad);
             populate('b2-select', match.b2, a.squad);
             
-            let bHtml = `<option value="">Select</option>`;
+            let bHtml = `<option value="">Select Bowler</option>`;
             f.squad.forEach(p => bHtml += `<option value="${p}" ${p === match.bowler ? 'selected' : ''}>${p}</option>`);
             document.getElementById('bowler-select').innerHTML = bHtml;
 
@@ -275,21 +277,23 @@
         }
 
         function renderScorecard() {
-            const a = getActive(); const f = getFielding();
-            document.getElementById('scorecard-container').innerHTML = `
-                <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-                    <h3 class="text-blue-400 font-bold mb-2 uppercase text-xs">${a.name} Batting</h3>
-                    <table class="w-full text-xs text-left">
-                        ${a.batStats.map(p => `<tr class="border-b border-slate-800"><td class="py-2">${p.name} ${p.out ? '(out)' : '*'}</td><td class="text-right">${p.r}(${p.b})</td></tr>`).join('')}
-                    </table>
-                </div>
+            const t1 = match.t1; const t2 = match.t2;
+            const renderSection = (team, fieldingTeam) => `
                 <div class="bg-slate-900 rounded-xl p-4 border border-slate-800 mt-4">
-                    <h3 class="text-red-400 font-bold mb-2 uppercase text-xs">${f.name} Bowling</h3>
-                    <table class="w-full text-xs text-left">
-                        ${f.bowlStats.map(p => `<tr><td class="py-2">${p.name}</td><td class="text-right">${fOver(p.b)} - ${p.r}R - ${p.w}W</td></tr>`).join('')}
+                    <h3 class="text-blue-400 font-bold mb-2 uppercase text-xs">${team.name} Batting</h3>
+                    <table class="w-full text-xs text-left mb-4">
+                        ${team.batStats.map(p => `<tr class="border-b border-slate-800/50"><td class="py-2">${p.name} ${p.out ? '(out)' : '*'}</td><td class="text-right font-mono">${p.r}(${p.b})</td></tr>`).join('')}
                     </table>
+                    <h4 class="text-[10px] text-slate-500 font-bold uppercase mb-1">Fall of Wickets</h4>
+                    <p class="text-[10px] text-slate-400 italic">
+                        ${team.fow.length ? team.fow.map(f => `${f.wNum}-${f.score} (${f.player}, ${f.over} ov)`).join(', ') : 'No wickets fallen'}
+                    </p>
                 </div>
             `;
+
+            document.getElementById('scorecard-container').innerHTML = 
+                renderSection(match.t1, match.t2) + 
+                (match.curr === 2 ? renderSection(match.t2, match.t1) : "");
         }
 
         function nextInnings() {
@@ -302,8 +306,9 @@
 
         function exportToExcel() {
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(getActive().batStats), "Batting");
-            XLSX.writeFile(wb, "CricketScorecard.xlsx");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(match.t1.batStats), "T1 Batting");
+            if(match.curr === 2) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(match.t2.batStats), "T2 Batting");
+            XLSX.writeFile(wb, "CricketMatch_Full.xlsx");
         }
 
         if(!match) triggerSetup(); else updateUI();
