@@ -156,7 +156,7 @@
     </footer>
 
     <script>
-        let match = JSON.parse(localStorage.getItem('cricket_multi_v2')) || null;
+        let match = JSON.parse(localStorage.getItem('cricket_multi_v3')) || null;
         let history = [];
 
         function toggleOversInput(type) {
@@ -176,6 +176,7 @@
             let p1 = document.getElementById('team1-squad').value.split('\n').filter(n => n.trim());
             let p2 = document.getElementById('team2-squad').value.split('\n').filter(n => n.trim());
             let type = document.getElementById('setup-type').value;
+            let totalPlayers = parseInt(document.getElementById('setup-players').value) || 11;
             
             match = {
                 type: type,
@@ -185,11 +186,11 @@
                 maxDayOvers: type === 'test' ? (parseInt(document.getElementById('setup-day-overs').value) || 90) : null,
                 currentDay: type === 'test' ? 1 : null,
                 dayBallsBowled: type === 'test' ? 0 : null,
-                wickets: (parseInt(document.getElementById('setup-players').value) || 11) - 1,
+                wickets: totalPlayers - 1,
                 striker: 1, b1: null, b2: null, bowler: "",
                 teams: [
-                    { name: "TEAM A", squad: p1.length ? p1 : Array.from({length:11},(_,i)=>`T1 P${i+1}`) },
-                    { name: "TEAM B", squad: p2.length ? p2 : Array.from({length:11},(_,i)=>`T2 P${i+1}`) }
+                    { name: "TEAM A", squad: p1.length ? p1 : Array.from({length: totalPlayers},(_,i)=>`T1 P${i+1}`) },
+                    { name: "TEAM B", squad: p2.length ? p2 : Array.from({length: totalPlayers},(_,i)=>`T2 P${i+1}`) }
                 ],
                 innings: [ createInningsObject(0) ] 
             };
@@ -207,7 +208,7 @@
         function fOver(b) { return Math.floor(b/6) + "." + (b%6); }
 
         function save() {
-            localStorage.setItem('cricket_multi_v2', JSON.stringify(match));
+            localStorage.setItem('cricket_multi_v3', JSON.stringify(match));
             updateUI();
         }
 
@@ -242,7 +243,6 @@
                 }
             }
 
-            // Check if test match daily limit is completed
             if (match.type === 'test' && match.dayBallsBowled >= (match.maxDayOvers * 6)) {
                 alert(`Stumps! Max overs (${match.maxDayOvers}) reached for Day ${match.currentDay}.`);
                 flagTransitionState();
@@ -268,194 +268,4 @@
             const inn = getActiveInnings();
             let b = inn.bowlStats.find(x => x.name === name);
             if (!b) { b = { name, r: 0, w: 0, b: 0 }; inn.bowlStats.push(b); }
-            b.r += r; b.w += w; if (isBall) b.b++;
-        }
-
-        function undoBall() { if (history.length) { match = JSON.parse(history.pop()); save(); } }
-
-        function assignPlayer(slot, name) {
-            const inn = getActiveInnings();
-            let p = inn.batStats.find(x => x.name === name);
-            if (!p) { p = { name, r: 0, b: 0, out: false }; inn.batStats.push(p); }
-            if (slot === 1) match.b1 = p; else match.b2 = p;
-            save();
-        }
-
-        function assignBowler(name) { match.bowler = name; save(); }
-
-        function isDayOver() {
-            return match.type === 'test' && match.dayBallsBowled >= (match.maxDayOvers * 6);
-        }
-
-        function flagTransitionState() {
-            document.getElementById('trans-btn').classList.add('animate-pulse', 'bg-blue-600', 'text-white');
-        }
-
-        function handleTransitionButton() {
-            if (!match) return;
-
-            // If a Test match daily overs budget is reached, handle "Next Day" instead of Innings shift
-            if (isDayOver()) {
-                if (confirm(`Move to Day ${match.currentDay + 1}? Resetting day over calculations.`)) {
-                    match.currentDay++;
-                    match.dayBallsBowled = 0;
-                    document.getElementById('trans-btn').classList.remove('animate-pulse', 'bg-blue-600', 'text-white');
-                    save();
-                }
-                return;
-            }
-
-            // Standard Innings switch handling
-            const currentIdx = match.currentInningsIdx;
-            if (currentIdx >= match.maxInnings - 1) {
-                return alert("Match has reached maximum configuration settings.");
-            }
-
-            let nextTeamIdx;
-            if (match.type === 'limited') {
-                nextTeamIdx = match.innings[0].teamIdx === 0 ? 1 : 0;
-            } else {
-                if (currentIdx === 0) nextTeamIdx = 1;
-                else if (currentIdx === 1) nextTeamIdx = 0;
-                else if (currentIdx === 2) nextTeamIdx = 1;
-            }
-
-            if (confirm(`Move to Innings ${currentIdx + 2}? This resets running batters/bowlers.`)) {
-                match.currentInningsIdx++;
-                match.innings.push(createInningsObject(nextTeamIdx));
-                match.b1 = null; match.b2 = null; match.bowler = "";
-                document.getElementById('trans-btn').classList.remove('animate-pulse', 'bg-blue-600', 'text-white');
-                save();
-                switchTab('live');
-            }
-        }
-
-        function updateUI() {
-            if (!match) return triggerSetup();
-            const inn = getActiveInnings();
-            const team = getActiveTeam();
-            
-            document.getElementById('team-display').innerText = team.name;
-            document.getElementById('innings-badge').innerText = `INN ${match.currentInningsIdx + 1}`;
-            document.getElementById('score-main').innerText = `${inn.r}/${inn.w}`;
-            document.getElementById('overs-main').innerText = fOver(inn.b);
-
-            // Handle UI elements dependent on Test format
-            if (match.type === 'test') {
-                document.getElementById('day-badge').classList.remove('hidden');
-                document.getElementById('day-badge').innerText = `DAY ${match.currentDay}`;
-                document.getElementById('day-overs-tracker').classList.remove('hidden');
-                document.getElementById('day-overs-val').innerText = fOver(match.dayBallsBowled);
-            } else {
-                document.getElementById('day-badge').classList.add('hidden');
-                document.getElementById('day-overs-tracker').classList.add('hidden');
-            }
-
-            // Set label for the Action button dynamically
-            const actionBtn = document.getElementById('trans-btn');
-            if (isDayOver()) {
-                actionBtn.innerText = "NEXT DAY";
-                flagTransitionState();
-            } else {
-                actionBtn.innerText = match.currentInningsIdx >= match.maxInnings - 1 ? "END MATCH" : "NEXT INN";
-            }
-
-            let statusText = "";
-            if (match.type === 'test') {
-                statusText = calculateTestRunningTotals();
-            } else if (match.type === 'limited' && match.currentInningsIdx === 1) {
-                let target = match.innings[0].r + 1;
-                statusText = `Target: ${target} | Need ${target - inn.r} runs off ${ (match.overs * 6) - inn.b } balls`;
-            }
-            document.getElementById('match-status').innerText = statusText;
-
-            const popBat = (id, cur, squad) => {
-                let h = `<option value="">Select Batter</option>`;
-                squad.forEach(s => {
-                    const isOut = inn.batStats.find(x => x.name === s && x.out);
-                    if (!isOut) h += `<option value="${s}" ${cur?.name === s ? 'selected' : ''}>${s}</option>`;
-                });
-                document.getElementById(id).innerHTML = h;
-            };
-            popBat('b1-select', match.b1, team.squad);
-            popBat('b2-select', match.b2, team.squad);
-
-            let bh = `<option value="">Select Bowler</option>`;
-            getFieldingTeam().squad.forEach(s => bh += `<option value="${s}" ${match.bowler === s ? 'selected' : ''}>${s}</option>`);
-            document.getElementById('bowler-select').innerHTML = bh;
-
-            document.getElementById('b1-runs').innerText = match.b1?.r || 0;
-            document.getElementById('b1-balls').innerText = match.b1?.b || 0;
-            document.getElementById('b2-runs').innerText = match.b2?.r || 0;
-            document.getElementById('b2-balls').innerText = match.b2?.b || 0;
-
-            document.getElementById('b1-card').className = match.striker === 1 ? 'p-3 rounded-xl border strike-glow bg-slate-900' : 'p-3 rounded-xl border border-slate-800 bg-slate-900/50';
-            document.getElementById('b2-card').className = match.striker === 2 ? 'p-3 rounded-xl border strike-glow bg-slate-900' : 'p-3 rounded-xl border border-slate-800 bg-slate-900/50';
-
-            document.getElementById('ticker').innerHTML = inn.h.slice(-10).map(x => `<div class="ball-circle ${x.class}">${x.v}</div>`).reverse().join('');
-        }
-
-        function calculateTestRunningTotals() {
-            let totals = [0, 0];
-            match.innings.forEach(inn => totals[inn.teamIdx] += inn.r);
-            let diff = totals[0] - totals[1];
-            let tA = match.teams[0].name;
-            let tB = match.teams[1].name;
-            
-            if (match.currentInningsIdx === 0) return `${tA} batting in 1st innings`;
-            if (match.currentInningsIdx === 1) {
-                return diff > 0 ? `${tB} trails by ${diff} runs` : `${tB} leads by ${Math.abs(diff)} runs`;
-            }
-            if (match.currentInningsIdx === 2) {
-                return diff >= 0 ? `${tA} leads by ${diff} runs` : `${tA} trails by ${Math.abs(diff)} runs`;
-            }
-            if (match.currentInningsIdx === 3) {
-                let target = diff + getActiveInnings().r + 1; 
-                return `${tB} needs ${target - getActiveInnings().r} runs to win`;
-            }
-            return "";
-        }
-
-        function switchTab(t) {
-            document.getElementById('view-live').classList.toggle('hidden', t !== 'live');
-            document.getElementById('view-scorecard').classList.toggle('hidden', t !== 'scorecard');
-            document.getElementById('tab-live-btn').className = t === 'live' ? 'py-4 px-6 tab-active' : 'py-4 px-6 text-slate-500';
-            document.getElementById('tab-score-btn').className = t === 'scorecard' ? 'py-4 px-6 tab-active' : 'py-4 px-6 text-slate-500';
-            if (t === 'scorecard') renderScorecard();
-        }
-
-        function renderScorecard() {
-            let html = "";
-            match.innings.forEach((inn, idx) => {
-                let tName = match.teams[inn.teamIdx].name;
-                html += `
-                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                    <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-2">
-                        <h3 class="font-bold text-blue-400 text-xs">${tName} (Innings ${idx + 1})</h3>
-                        <span class="font-bold text-sm">${inn.r}/${inn.w} (${fOver(inn.b)})</span>
-                    </div>
-                    <div class="text-[11px] space-y-1 mb-3">
-                        ${inn.batStats.map(p => `<div class="flex justify-between text-slate-300"><span>${p.name}${p.out?' (out)':'*'}</span><b>${p.r}(${p.b})</b></div>`).join('')}
-                    </div>
-                    <div class="text-[10px] text-slate-500 border-t border-slate-800/40 pt-2">
-                        ${inn.bowlStats.map(b => `<div class="flex justify-between"><span>${b.name}</span><span>${fOver(b.b)}-${b.r}-${b.w}</span></div>`).join('')}
-                    </div>
-                </div>`;
-            });
-            document.getElementById('scorecard-container').innerHTML = html;
-        }
-
-        function exportToExcel() {
-            const wb = XLSX.utils.book_new();
-            match.innings.forEach((inn, idx) => {
-                let sheetData = inn.batStats.map(p => ({ Player: p.name, Runs: p.r, Balls: p.b, Status: p.out ? 'Out' : 'Not Out' }));
-                let ws = XLSX.utils.json_to_sheet(sheetData);
-                XLSX.utils.book_append_sheet(wb, ws, `Innings ${idx + 1}`);
-            });
-            XLSX.writeFile(wb, "Match_Record.xlsx");
-        }
-
-        if (!match) triggerSetup(); else { toggleOversInput(match.type); updateUI(); }
-    </script>
-</body>
-</html>
+            b.r += r; b.w += w; if (isBall) b.b
