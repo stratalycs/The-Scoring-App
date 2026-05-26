@@ -158,46 +158,103 @@
 
         function toggleSetupFields(type) {
             const isTest = (type === 'test');
+            const oversEl = document.getElementById('setup-overs');
+            const dayOversEl = document.getElementById('setup-day-overs');
             
-            document.getElementById('setup-overs').disabled = isTest;
-            document.getElementById('setup-day-overs').disabled = !isTest;
+            if (oversEl) oversEl.disabled = isTest;
+            if (dayOversEl) dayOversEl.disabled = !isTest;
             
-            document.getElementById('wrapper-overs').style.opacity = isTest ? '0.3' : '1';
-            document.getElementById('wrapper-day-overs').style.opacity = isTest ? '1' : '0.3';
+            const wOvers = document.getElementById('wrapper-overs');
+            const wDayOvers = document.getElementById('wrapper-day-overs');
+            if (wOvers) wOvers.style.opacity = isTest ? '0.3' : '1';
+            if (wDayOvers) wDayOvers.style.opacity = isTest ? '1' : '0.3';
         }
 
         function triggerSetup() {
-            document.getElementById('setup-overlay').classList.remove('hidden');
-            toggleSetupFields(document.getElementById('setup-type').value);
+            const overlay = document.getElementById('setup-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                const typeEl = document.getElementById('setup-type');
+                if (typeEl) toggleSetupFields(typeEl.value);
+            }
         }
 
         function confirmSetup() {
-            const type = document.getElementById('setup-type').value;
-            const t1Input = document.getElementById('team1-squad').value.split('\n').filter(n => n.trim());
-            const t2Input = document.getElementById('team2-squad').value.split('\n').filter(n => n.trim());
-            const totalPlayers = parseInt(document.getElementById('setup-players').value) || 11;
+            try {
+                const typeEl = document.getElementById('setup-type');
+                const type = typeEl ? typeEl.value : 'limited';
+                
+                const s1 = document.getElementById('team1-squad') ? document.getElementById('team1-squad').value : "";
+                const s2 = document.getElementById('team2-squad') ? document.getElementById('team2-squad').value : "";
+                
+                const t1Input = s1.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+                const t2Input = s2.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+                
+                const playersEl = document.getElementById('setup-players');
+                const totalPlayers = playersEl ? (parseInt(playersEl.value) || 11) : 11;
 
+                const finalSquad1 = t1Input.length ? t1Input : Array.from({length: totalPlayers}, (_, i) => `Team A P${i + 1}`);
+                const finalSquad2 = t2Input.length ? t2Input : Array.from({length: totalPlayers}, (_, i) => `Team B P${i + 1}`);
+
+                const oversInputEl = document.getElementById('setup-overs');
+                const dayOversInputEl = document.getElementById('setup-day-overs');
+
+                const parsedOvers = oversInputEl ? (parseInt(oversInputEl.value) || 20) : 20;
+                const parsedDayOvers = dayOversInputEl ? (parseInt(dayOversInputEl.value) || 90) : 90;
+
+                state = {
+                    matchType: type,
+                    maxInnings: type === 'test' ? 4 : 2,
+                    currentInningsIndex: 0,
+                    allowedWickets: totalPlayers - 1,
+                    limitOvers: type === 'test' ? Infinity : parsedOvers,
+                    limitDayOvers: type === 'test' ? parsedDayOvers : null,
+                    currentDay: type === 'test' ? 1 : null,
+                    dayBallsBowled: 0,
+                    strikerSlot: 1,
+                    activeB1Name: "",
+                    activeB2Name: "",
+                    activeBowlerName: "",
+                    teams: [
+                        { name: "TEAM A", squad: finalSquad1 },
+                        { name: "TEAM B", squad: finalSquad2 }
+                    ],
+                    innings: [ createInnings(0) ]
+                };
+
+                const overlay = document.getElementById('setup-overlay');
+                if (overlay) overlay.classList.add('hidden');
+                
+                commitState();
+            } catch (err) {
+                console.error("Setup failed execution:", err);
+                alert("Initialization error occurred. Forcing safe defaults.");
+                forceDefaultInitialization();
+            }
+        }
+
+        function forceDefaultInitialization() {
             state = {
-                matchType: type,
-                maxInnings: type === 'test' ? 4 : 2,
+                matchType: 'limited',
+                maxInnings: 2,
                 currentInningsIndex: 0,
-                allowedWickets: totalPlayers - 1,
-                limitOvers: type === 'test' ? Infinity : (parseInt(document.getElementById('setup-overs').value) || 20),
-                limitDayOvers: type === 'test' ? (parseInt(document.getElementById('setup-day-overs').value) || 90) : null,
-                currentDay: type === 'test' ? 1 : null,
+                allowedWickets: 10,
+                limitOvers: 20,
+                limitDayOvers: null,
+                currentDay: null,
                 dayBallsBowled: 0,
                 strikerSlot: 1,
                 activeB1Name: "",
                 activeB2Name: "",
                 activeBowlerName: "",
                 teams: [
-                    { name: "TEAM A", squad: t1Input.length ? t1Input : Array.from({length: totalPlayers}, (_, i) => `T1 Player ${i + 1}`) },
-                    { name: "TEAM B", squad: t2Input.length ? t2Input : Array.from({length: totalPlayers}, (_, i) => `T2 Player ${i + 1}`) }
+                    { name: "TEAM A", squad: Array.from({length: 11}, (_, i) => `Team A P${i + 1}`) },
+                    { name: "TEAM B", squad: Array.from({length: 11}, (_, i) => `Team B P${i + 1}`) }
                 ],
                 innings: [ createInnings(0) ]
             };
-
-            document.getElementById('setup-overlay').classList.add('hidden');
+            const overlay = document.getElementById('setup-overlay');
+            if (overlay) overlay.classList.add('hidden');
             commitState();
         }
 
@@ -354,7 +411,9 @@
 
         function updateUI() {
             if (!state) return triggerSetup();
-            document.getElementById('setup-overlay').classList.add('hidden');
+            
+            const overlay = document.getElementById('setup-overlay');
+            if (overlay) overlay.classList.add('hidden');
 
             const inn = currentInnings();
             const batTeam = battingTeam();
